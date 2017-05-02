@@ -315,6 +315,42 @@ void f2fs_balance_fs_bg(struct f2fs_sb_info *sbi)
 			!available_free_memory(sbi, INO_ENTRIES) ||
 			jiffies > sbi->cp_expires)
 		f2fs_sync_fs(sbi->sb, true);
+		stat_inc_bg_cp_count(sbi->stat_info);
+	}
+}
+
+static int __submit_flush_wait(struct f2fs_sb_info *sbi,
+				struct block_device *bdev)
+{
+	struct bio *bio = f2fs_bio_alloc(sbi, 0, true);
+	int ret;
+
+	bio->bi_rw = REQ_OP_WRITE | REQ_SYNC;
+	bio->bi_bdev = bdev;
+	ret = submit_bio_wait(WRITE_FLUSH, bio);
+	bio_put(bio);
+
+	trace_f2fs_issue_flush(bdev, test_opt(sbi, NOBARRIER),
+				test_opt(sbi, FLUSH_MERGE), ret);
+	return ret;
+}
+
+static int submit_flush_wait(struct f2fs_sb_info *sbi, nid_t ino)
+{
+	int ret = 0;
+	int i;
+
+	if (!sbi->s_ndevs)
+		return __submit_flush_wait(sbi, sbi->sb->s_bdev);
+
+	for (i = 0; i < sbi->s_ndevs; i++) {
+		if (!is_dirty_device(sbi, ino, i, FLUSH_INO))
+			continue;
+		ret = __submit_flush_wait(sbi, FDEV(i).bdev);
+		if (ret)
+			break;
+	}
+	return ret;
 }
 
 static int issue_flush_thread(void *data)

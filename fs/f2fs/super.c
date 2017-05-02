@@ -918,8 +918,22 @@ loff_t max_file_size(unsigned bits)
 	return result;
 }
 
-static inline bool sanity_check_area_boundary(struct super_block *sb,
-					struct f2fs_super_block *raw_super)
+static int __f2fs_commit_super(struct buffer_head *bh,
+			struct f2fs_super_block *super)
+{
+	lock_buffer(bh);
+	if (super)
+		memcpy(bh->b_data + F2FS_SUPER_OFFSET, super, sizeof(*super));
+	set_buffer_uptodate(bh);
+	set_buffer_dirty(bh);
+	unlock_buffer(bh);
+
+	/* it's rare case, we can do fua all the time */
+	return __sync_dirty_buffer(bh, WRITE_SYNC | WRITE_FLUSH_FUA);
+}
+
+static inline bool sanity_check_area_boundary(struct f2fs_sb_info *sbi,
+					struct buffer_head *bh)
 {
 	u32 segment0_blkaddr = le32_to_cpu(raw_super->segment0_blkaddr);
 	u32 cp_blkaddr = le32_to_cpu(raw_super->cp_blkaddr);
