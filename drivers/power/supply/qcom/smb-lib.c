@@ -26,10 +26,6 @@
 #include "step-chg-jeita.h"
 #include "storm-watch.h"
 
-#ifdef CONFIG_MACH_XIAOMI_MSM8998
-#include <linux/fb.h>
-#endif
-
 #ifdef CONFIG_FORCE_FAST_CHARGE
 #include <linux/fastchg.h>
 #endif
